@@ -2,5 +2,7 @@
   // 이름은 Cloudflare 화면의 프로젝트 이름(nagago)과 같아야 한다.
   "name": "nagago",
   "main": "src/index.js",
-  "compatibility_date": "2026-10-01"
+  "compatibility_date": "2026-10-01",
+  // 포털이 한국 밖 IP를 막는 것으로 의심돼서, 서울 AWS 리전 가까이에서 실행하도록 요청한다.
+  "placement": { "region": "aws:ap-northeast-2" }
 }
