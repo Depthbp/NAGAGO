@@ -45,6 +45,8 @@ export default {
     // 사용자가 보낸 파라미터를 그대로 넘기되, 인증키는 서버 것만 쓴다.
     const query = new URLSearchParams(url.searchParams);
     query.delete('serviceKey');
+    const debug = query.get('debug') === '1'; // 진단용: 업스트림 응답 상태를 그대로 보여준다
+    query.delete('debug');
     if (!query.has('type')) query.set('type', 'JSON');
     if (Number(query.get('numOfRows')) > 1000) query.set('numOfRows', '1000');
     query.sort();
@@ -52,7 +54,7 @@ export default {
     // 캐시 키에는 인증키가 들어가지 않는다.
     const cacheKey = new Request(`https://cache.nagago.local/${fn}?${query}`);
     const cache = caches.default;
-    const cached = await cache.match(cacheKey);
+    const cached = debug ? null : await cache.match(cacheKey);
     if (cached) {
       return withHeaders(cached, { ...cors, 'X-Cache': 'HIT' });
     }
@@ -60,12 +62,28 @@ export default {
     const upstreamUrl = `${UPSTREAM}/${fn}?${new URLSearchParams({ serviceKey: env.DATA_GO_KR_KEY })}&${query}`;
     let upstream;
     try {
-      upstream = await fetch(upstreamUrl);
+      upstream = await fetch(upstreamUrl, {
+        headers: { 'User-Agent': 'NAGAGO/1.0', Accept: 'application/json' },
+      });
     } catch {
       return json({ error: 'upstream unreachable' }, 502, cors);
     }
 
     const body = await upstream.text();
+
+    if (debug) {
+      return json(
+        {
+          upstreamStatus: upstream.status,
+          upstreamUrl: `${UPSTREAM}/${fn}?serviceKey=***&${query}`,
+          bodyHead: body.slice(0, 300),
+          colo: request.cf && request.cf.colo,
+          country: request.cf && request.cf.country,
+        },
+        200,
+        cors,
+      );
+    }
     const response = new Response(body, {
       status: upstream.status,
       headers: {
