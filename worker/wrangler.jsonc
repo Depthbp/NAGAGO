@@ -1,0 +1,6 @@
+{
+  // 이름은 Cloudflare 화면의 프로젝트 이름(nagago)과 같아야 한다.
+  "name": "nagago",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01"
+}
