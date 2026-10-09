@@ -45,11 +45,45 @@ export default {
     // 사용자가 보낸 파라미터를 그대로 넘기되, 인증키는 서버 것만 쓴다.
     const query = new URLSearchParams(url.searchParams);
     query.delete('serviceKey');
-    const debug = query.get('debug') === '1'; // 진단용: 업스트림 응답 상태를 그대로 보여준다
+    // 진단용: debug=1은 업스트림 응답 상태, debug=2는 요청 방식을 바꿔가며 비교한 결과를 보여준다.
+    const debugMode = query.get('debug');
+    const debug = debugMode === '1' || debugMode === '2';
     query.delete('debug');
     if (!query.has('type')) query.set('type', 'JSON');
     if (Number(query.get('numOfRows')) > 1000) query.set('numOfRows', '1000');
     query.sort();
+
+    if (debugMode === '2') {
+      const base = `${UPSTREAM}/${fn}?serviceKey=${encodeURIComponent(env.DATA_GO_KR_KEY)}`;
+      const noType = new URLSearchParams(query);
+      noType.delete('type');
+      const variants = {
+        proxy: { qs: query.toString(), headers: { 'User-Agent': 'NAGAGO/1.0', Accept: 'application/json' } },
+        // 브라우저에서 성공했던 주소와 같은 파라미터 순서 (crsrd_map_info 전용)
+        'browser-order': { qs: 'pageNo=1&numOfRows=1000&type=JSON&stdgCd=1100000000', headers: {} },
+        'no-type': { qs: noType.toString(), headers: {} },
+        'plain-headers': { qs: query.toString(), headers: {} },
+      };
+      const results = await Promise.all(
+        Object.entries(variants).map(async ([label, v]) => {
+          try {
+            const r = await fetch(`${base}&${v.qs}`, { headers: v.headers });
+            return [label, { status: r.status, head: (await r.text()).slice(0, 160) }];
+          } catch {
+            return [label, { error: 'fetch failed' }];
+          }
+        }),
+      );
+      return json(
+        {
+          colo: request.cf && request.cf.colo,
+          country: request.cf && request.cf.country,
+          results: Object.fromEntries(results),
+        },
+        200,
+        cors,
+      );
+    }
 
     // 캐시 키에는 인증키가 들어가지 않는다.
     const cacheKey = new Request(`https://cache.nagago.local/${fn}?${query}`);
